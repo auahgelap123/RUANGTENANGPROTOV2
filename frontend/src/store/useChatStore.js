@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
-import { useAuthStore } from "./useAuthStore";
+import toast from "react-hot-toast";
+import { useAuthStore } from "./useAuthStore"; // Import store sebelah buat ambil Socket
 
 export const useChatStore = create((set, get) => ({
   messages: [],
@@ -9,6 +9,9 @@ export const useChatStore = create((set, get) => ({
   selectedUser: null,
   isUsersLoading: false,
   isMessagesLoading: false,
+  
+  // STATE BARU: Buat nyimpen jumlah notifikasi per user { userId: jumlah }
+  unreadMessages: {},
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -27,12 +30,22 @@ export const useChatStore = create((set, get) => ({
     try {
       const res = await axiosInstance.get(`/messages/${userId}`);
       set({ messages: res.data });
+
+      // LOGIC BARU: Pas buka chat user ini, reset notifikasinya jadi 0
+      set((state) => ({
+        unreadMessages: {
+            ...state.unreadMessages,
+            [userId]: 0, 
+        }
+      }));
+
     } catch (error) {
       toast.error(error.response.data.message);
     } finally {
       set({ isMessagesLoading: false });
     }
   },
+
   sendMessage: async (messageData) => {
     const { selectedUser, messages } = get();
     try {
@@ -43,26 +56,50 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
+  // --- LOGIC SOCKET PINTAR (CHAT + NOTIF) ---
   subscribeToMessages: () => {
     const { selectedUser } = get();
-    if (!selectedUser) return;
+    const socket = useAuthStore.getState().socket; // Pinjem socket dari AuthStore
 
-    const socket = useAuthStore.getState().socket;
+    if (!socket) return;
 
     socket.on("newMessage", (newMessage) => {
-      const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
-      if (!isMessageSentFromSelectedUser) return;
+      const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser?._id;
 
-      set({
-        messages: [...get().messages, newMessage],
-      });
+      // Skenario 1: Kita lagi chat sama dia -> Masukin pesannya ke layar
+      if (isMessageSentFromSelectedUser) {
+        set({ messages: [...get().messages, newMessage] });
+      } 
+      // Skenario 2: Kita lagi GAK chat sama dia -> Tambah angka Notifikasi (+1)
+      else {
+        set((state) => ({
+            unreadMessages: {
+                ...state.unreadMessages,
+                [newMessage.senderId]: (state.unreadMessages[newMessage.senderId] || 0) + 1
+            }
+        }));
+        
+        // Optional: Bunyi notif atau toast kecil
+        // toast.success("Pesan baru masuk!"); 
+      }
     });
   },
 
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
+    if (!socket) return;
     socket.off("newMessage");
   },
 
-  setSelectedUser: (selectedUser) => set({ selectedUser }),
+  // Update setSelectedUser buat reset notif juga pas diklik
+  setSelectedUser: (selectedUser) => {
+      set((state) => ({ 
+          selectedUser,
+          // Reset notif user yang baru diklik
+          unreadMessages: {
+            ...state.unreadMessages,
+            [selectedUser?._id]: 0 
+          }
+      }));
+  },
 }));

@@ -15,14 +15,26 @@ import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 
 const App = () => {
-  const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore();
+  // AMBIL connectSocket & disconnectSocket DARI SINI
+  const { authUser, checkAuth, isCheckingAuth, onlineUsers, connectSocket, disconnectSocket } = useAuthStore();
   const { theme } = useThemeStore();
 
   console.log({ onlineUsers });
 
+  // 1. Cek Auth pas awal buka web
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // 2. LOGIC TAMBAHAN (PENTING):
+  // Memantau perubahan user. Kalau Login -> Connect Socket. Kalau Logout -> Disconnect.
+  useEffect(() => {
+    if (authUser) {
+      connectSocket();
+    } else {
+      disconnectSocket();
+    }
+  }, [authUser]); // Dependency: authUser
 
   console.log({ authUser });
 
