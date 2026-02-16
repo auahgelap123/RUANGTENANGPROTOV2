@@ -1,105 +1,94 @@
-import cloudinary from "../lib/cloudinary.js";
+import User from "../models/user.model.js";
 
+// --- KOLAM MISI (QUEST POOL) ---
 const QUEST_POOL = [
-  {
-    id: "q1",
-    title: "Selfie Senyum",
-    description: "Ambil selfie senyum terbaikmu hari ini biar PD nambah!",
-    type: "image",
-    exp: "50 XP",
-  },
-  {
-    id: "q2",
-    title: "Touch Grass",
-    description: "Foto suasana di luar rumah/kosan kamu. Buktikan kamu keluar!",
-    type: "image",
-    exp: "40 XP",
-  },
-  {
-    id: "q3",
-    title: "Sapa Orang Baru",
-    description: "Ceritakan gimana kamu nyapa orang asing hari ini. Respon mereka gimana?",
-    type: "text",
-    minLength: 50,
-    exp: "100 XP",
-  },
-  {
-    id: "q4",
-    title: "Kebaikan Kecil",
-    description: "Tulis satu hal baik yang kamu lakuin buat orang lain hari ini.",
-    type: "text",
-    minLength: 30,
-    exp: "60 XP",
-  },
-  {
-    id: "q5",
-    title: "Langit Hari Ini",
-    description: "Foto langit di tempatmu sekarang. Mendung atau cerah?",
-    type: "image",
-    exp: "30 XP",
-  },
+    { id: 1, title: "Sapa Pagi", description: "Sapa seseorang di chat hari ini.", exp: 20, questType: "text" },
+    { id: 2, title: "Langit Biru", description: "Foto langit hari ini dan ceritakan perasaanmu.", exp: 50, questType: "image" },
+    { id: 3, title: "Air Putih", description: "Upload foto botol minummu, jangan lupa hidrasi!", exp: 30, questType: "image" },
+    { id: 4, title: "Jurnal Singkat", description: "Tulis 3 hal yang bikin kamu bersyukur hari ini.", exp: 40, questType: "text" },
+    { id: 5, title: "Tanaman", description: "Foto tanaman atau pohon di sekitarmu.", exp: 35, questType: "image" },
+    { id: 6, title: "Musik", description: "Ceritakan lagu apa yang lagi kamu dengerin.", exp: 25, questType: "text" },
+    { id: 7, title: "Olahraga", description: "Foto sepatumu atau alat olahragamu.", exp: 60, questType: "image" },
+    { id: 8, title: "Selfie Senyum", description: "Ayo senyum! Kirim foto senyum terbaikmu.", exp: 50, questType: "image" }
 ];
 
+// Helper: Tanggal WIB (Indonesia)
+const getIndonesianDate = () => {
+    const date = new Date();
+    date.setHours(date.getHours() + 7); // Tambah 7 jam buat WIB
+    return date.toISOString().split('T')[0];
+};
+
+const getRandomQuests = (count) => {
+    const shuffled = [...QUEST_POOL].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
+};
+
+// 1. GET QUEST (Auto Reset Tiap Tengah Malam WIB)
 export const getDailyQuests = async (req, res) => {
   try {
-    // Logic: Quest berubah setiap hari (berdasarkan tanggal)
-    const today = new Date().toDateString();
-    let hash = 0;
-    for (let i = 0; i < today.length; i++) {
-      hash = today.charCodeAt(i) + ((hash << 5) - hash);
+    const userId = req.user._id;
+    const user = await User.findById(userId);
+    
+    const today = getIndonesianDate(); // Pake Tanggal WIB
+
+    // Logic Reset: Kalau tanggal beda / kosong / data rusak -> RESET
+    const isDataCorrupt = user.activeQuests.length > 0 && !user.activeQuests[0].questType;
+
+    if (user.lastQuestDate !== today || user.activeQuests.length === 0 || isDataCorrupt) {
+        const newQuests = getRandomQuests(3);
+        user.activeQuests = newQuests;
+        user.lastQuestDate = today;
+        await user.save();
+        return res.status(200).json(newQuests);
     }
 
-    const selectedQuests = [];
-    const poolSize = QUEST_POOL.length;
-    
-    let index1 = Math.abs(hash) % poolSize;
-    let index2 = Math.abs(hash * 2) % poolSize;
-    let index3 = Math.abs(hash * 3) % poolSize;
-
-    if (index2 === index1) index2 = (index2 + 1) % poolSize;
-    if (index3 === index1 || index3 === index2) index3 = (index3 + 1) % poolSize;
-
-    selectedQuests.push(QUEST_POOL[index1], QUEST_POOL[index2], QUEST_POOL[index3]);
-
-    res.status(200).json(selectedQuests);
+    res.status(200).json(user.activeQuests);
   } catch (error) {
-    console.log("Error in getDailyQuests: ", error.message);
-    res.status(500).json({ message: "Internal Server Error" });
+    console.error("Error fetch quests:", error);
+    res.status(500).json({ message: "Server Error" });
   }
 };
 
+// 2. SUBMIT QUEST (SEKARANG MENGHAPUS QUEST DARI DB)
 export const submitQuest = async (req, res) => {
   try {
-    const { questId, textResponse, imageResponse } = req.body;
-    const quest = QUEST_POOL.find((q) => q.id === questId);
+    const { questId } = req.body;
+    const userId = req.user._id;
 
-    if (!quest) return res.status(404).json({ message: "Quest tidak ditemukan" });
+    // Hapus quest dari list 'activeQuests' user
+    await User.findByIdAndUpdate(userId, {
+        $pull: { activeQuests: { id: questId } }
+    });
 
-    // Validasi Anti-Troll Text
-    if (quest.type === "text") {
-      if (!textResponse || textResponse.length < quest.minLength) {
-        return res.status(400).json({ 
-          message: `Jawaban terlalu pendek! Minimal ${quest.minLength} karakter biar gak dikira trolling.` 
-        });
-      }
-    }
-
-    // Validasi Anti-Troll Image
-    if (quest.type === "image") {
-      if (!imageResponse) {
-        return res.status(400).json({ message: "Harus upload foto bukti dong!" });
-      }
-      try {
-        await cloudinary.uploader.upload(imageResponse);
-      } catch (uploadError) {
-        return res.status(500).json({ message: "Gagal upload gambar ke server" });
-      }
-    }
-
-    res.status(200).json({ message: "Quest Selesai! XP Bertambah.", earnedExp: quest.exp });
-
+    res.status(200).json({ message: "Quest completed & removed!" });
   } catch (error) {
-    console.log("Error in submitQuest: ", error.message);
-    res.status(500).json({ message: "Internal Server Error" });
+    console.error("Error submit quest:", error);
+    res.status(500).json({ message: "Server Error" });
   }
+};
+
+// 3. REROLL QUEST
+export const rerollQuest = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user._id;
+        const user = await User.findById(userId);
+
+        const questIndex = user.activeQuests.findIndex(q => q.id === parseInt(id));
+        if (questIndex === -1) return res.status(404).json({ message: "Quest not found" });
+
+        const currentQuestIds = user.activeQuests.map(q => q.id);
+        const availableQuests = QUEST_POOL.filter(q => !currentQuestIds.includes(q.id));
+
+        const poolToUse = availableQuests.length > 0 ? availableQuests : QUEST_POOL;
+        const randomNewQuest = poolToUse[Math.floor(Math.random() * poolToUse.length)];
+
+        user.activeQuests[questIndex] = randomNewQuest;
+        await user.save();
+
+        res.status(200).json(user.activeQuests);
+    } catch (error) {
+        res.status(500).json({ message: "Server Error" });
+    }
 };

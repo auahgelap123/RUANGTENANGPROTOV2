@@ -1,8 +1,9 @@
 import User from "../models/user.model.js";
 
-// Fungsi 1: Ambil semua user buat ditampilkan di dashboard
+// Fungsi 1: Ambil semua user dari database buat dikirim ke Admin Panel
 export const getAllUsersForAdmin = async (req, res) => {
   try {
+    // Cari semua user, tapi jangan bawa password-nya (bahaya)
     const users = await User.find({}).select("-password");
     res.status(200).json(users);
   } catch (error) {
@@ -11,11 +12,11 @@ export const getAllUsersForAdmin = async (req, res) => {
   }
 };
 
-// Fungsi 2: Update role user (jadi volunteer/admin/user)
+// Fungsi 2: Update role user (Jadwalin jadi Volunteer/Psikolog/User)
 export const updateUserRole = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { role } = req.body; // "user", "volunteer", atau "admin"
+    const { role } = req.body; // Role baru (volunteer/psychologist/user)
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
