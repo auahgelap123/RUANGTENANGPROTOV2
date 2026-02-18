@@ -16,6 +16,16 @@ const userSchema = new mongoose.Schema(
     contacts: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
+// ... di dalam userSchema
+    rating: { type: Number, default: 0 },
+    totalReviews: { type: Number, default: 0 },
+    
+    // TAMBAHAN BUAT SKOR GAME
+    gameWins: { type: Number, default: 0 }, // <--- TAMBAH INI
+    
+    contacts: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+// ...
+
     // --- QUEST SYSTEM (FIXED) ---
     activeQuests: [{ 
         id: Number, 

@@ -1,4 +1,5 @@
 import User from "../models/user.model.js";
+import { getReceiverSocketId, io } from "../lib/socket.js"; 
 
 // 1. RATING USER
 export const rateUser = async (req, res) => {
@@ -10,6 +11,7 @@ export const rateUser = async (req, res) => {
     const userToRate = await User.findById(id);
     if (!userToRate) return res.status(404).json({ message: "User not found" });
 
+    // Hitung Rata-rata Rating Baru
     const currentTotalScore = (userToRate.rating || 0) * (userToRate.totalReviews || 0);
     const newTotalReviews = (userToRate.totalReviews || 0) + 1;
     const newAverage = (currentTotalScore + stars) / newTotalReviews;
@@ -20,14 +22,15 @@ export const rateUser = async (req, res) => {
 
     res.status(200).json(userToRate);
   } catch (error) {
+    console.error("Rate Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
 
-// 2. KIRIM REQUEST (SEND REQUEST)
+// 2. KIRIM REQUEST
 export const sendFriendRequest = async (req, res) => {
   try {
-    const { id } = req.params; // Orang yang mau di-add
+    const { id } = req.params; 
     const myId = req.user._id;
 
     if (id === myId.toString()) return res.status(400).json({ message: "Gabisa add diri sendiri" });
@@ -35,45 +38,37 @@ export const sendFriendRequest = async (req, res) => {
     const targetUser = await User.findById(id);
     if (!targetUser) return res.status(404).json({ message: "User not found" });
 
-    // LOGIC: Kalau dia Volunteer/Psikolog -> LANGSUNG ADD (Auto Accept)
-    if (targetUser.role === "volunteer" || targetUser.role === "psychologist") {
-       await User.findByIdAndUpdate(myId, { $addToSet: { contacts: id } });
-       // Opsional: Volunteer ga wajib add balik, tapi biar bisa chat 2 arah, add aja
-       // await User.findByIdAndUpdate(id, { $addToSet: { contacts: myId } });
-       return res.status(200).json({ message: "Added instantly", status: "connected" });
-    }
-
-    // LOGIC: Kalau User Biasa -> MASUK REQUEST
-    if (targetUser.friendRequests.includes(myId)) {
-        return res.status(400).json({ message: "Request sudah dikirim sebelumnya" });
-    }
+    if (targetUser.contacts.includes(myId)) return res.status(400).json({ message: "Sudah berteman" });
+    if (targetUser.friendRequests.includes(myId)) return res.status(400).json({ message: "Request sudah dikirim" });
     
-    // Masukin ID kita ke kotak "friendRequests" dia
+    // Masuk ke Pending List Target
     await User.findByIdAndUpdate(id, { $addToSet: { friendRequests: myId } });
 
-    res.status(200).json({ message: "Request sent", status: "pending" });
+    // Notif Realtime
+    const receiverSocketId = getReceiverSocketId(id);
+    if (receiverSocketId) io.to(receiverSocketId).emit("friendUpdate");
 
+    res.status(200).json({ message: "Permintaan dikirim", status: "pending" });
   } catch (error) {
-    console.log("Error send request:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
 
-// 3. TERIMA REQUEST (ACCEPT)
+// 3. TERIMA REQUEST
 export const acceptFriendRequest = async (req, res) => {
     try {
-        const { id } = req.params; // ID orang yang request ke kita
+        const { id } = req.params; 
         const myId = req.user._id;
 
-        // 1. Masukin ke contacts masing-masing (Sah Temenan)
-        await User.findByIdAndUpdate(myId, { 
-            $addToSet: { contacts: id },
-            $pull: { friendRequests: id } // Hapus dari antrian request
-        });
-        
-        await User.findByIdAndUpdate(id, { $addToSet: { contacts: myId } });
+        // Sahkan dua arah
+        await User.findByIdAndUpdate(myId, { $addToSet: { contacts: id }, $pull: { friendRequests: id } });
+        await User.findByIdAndUpdate(id, { $addToSet: { contacts: myId } }); // Target gak perlu pull request karena dia gak nyimpen request kita
 
-        res.status(200).json({ message: "Friend request accepted" });
+        // Notif Realtime
+        const senderSocketId = getReceiverSocketId(id);
+        if (senderSocketId) io.to(senderSocketId).emit("friendUpdate");
+
+        res.status(200).json({ message: "Pertemanan diterima" });
     } catch (error) {
         res.status(500).json({ message: "Server Error" });
     }
@@ -82,16 +77,47 @@ export const acceptFriendRequest = async (req, res) => {
 // 4. HAPUS TEMAN (UNFRIEND)
 export const removeContact = async (req, res) => {
     try {
-        const { id } = req.params; // ID teman yang mau dibuang
+        const { id } = req.params; 
         const myId = req.user._id;
 
-        // Hapus dari kontak SAYA
-        await User.findByIdAndUpdate(myId, { $pull: { contacts: id } });
-        
-        // Hapus saya dari kontak DIA (Biar putus hubungan total)
-        await User.findByIdAndUpdate(id, { $pull: { contacts: myId } });
+        // Bersihkan Total (Hapus dari kontak & request di KEDUA sisi)
+        await User.findByIdAndUpdate(myId, { $pull: { contacts: id, friendRequests: id } });
+        await User.findByIdAndUpdate(id, { $pull: { contacts: myId, friendRequests: myId } });
 
-        res.status(200).json({ message: "Unfriended successfully" });
+        // Notif Realtime
+        const exFriendSocketId = getReceiverSocketId(id);
+        if (exFriendSocketId) io.to(exFriendSocketId).emit("friendUpdate");
+
+        res.status(200).json({ message: "Berhasil dihapus" });
+    } catch (error) {
+        res.status(500).json({ message: "Server Error" });
+    }
+};
+
+// ... fungsi removeContact dll ...
+
+// 5. UPDATE GAME WIN (Saat menang game)
+export const addGameWin = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        // Tambah 1 kemenangan
+        const updatedUser = await User.findByIdAndUpdate(
+            userId, 
+            { $inc: { gameWins: 1 } }, 
+            { new: true }
+        );
+        res.status(200).json(updatedUser);
+    } catch (error) {
+        res.status(500).json({ message: "Server Error" });
+    }
+};
+
+// 6. GET LEADERBOARD (Top 5 Player)
+export const getLeaderboard = async (req, res) => {
+    try {
+        // Ambil 5 user dengan gameWins terbanyak, urutkan descending
+        const leaders = await User.find({}).sort({ gameWins: -1 }).limit(5).select("fullName profilePic gameWins");
+        res.status(200).json(leaders);
     } catch (error) {
         res.status(500).json({ message: "Server Error" });
     }

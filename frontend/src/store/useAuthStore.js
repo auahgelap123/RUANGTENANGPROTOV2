@@ -1,9 +1,8 @@
 import { create } from "zustand";
-import { axiosInstance } from "../lib/axios.js";
+import { axiosInstance } from "../lib/axios";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 
-// Pastikan port ini sesuai dengan backend lu (default: 5001)
 const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5001" : "/";
 
 export const useAuthStore = create((set, get) => ({
@@ -19,8 +18,6 @@ export const useAuthStore = create((set, get) => ({
     try {
       const res = await axiosInstance.get("/auth/check");
       set({ authUser: res.data });
-      
-      // FIX: Langsung connect socket kalau user terautentikasi
       get().connectSocket();
     } catch (error) {
       console.log("Error in checkAuth:", error);
@@ -36,8 +33,6 @@ export const useAuthStore = create((set, get) => ({
       const res = await axiosInstance.post("/auth/signup", data);
       set({ authUser: res.data });
       toast.success("Account created successfully");
-      
-      // FIX: Langsung connect socket setelah signup
       get().connectSocket();
     } catch (error) {
       toast.error(error.response.data.message);
@@ -52,8 +47,6 @@ export const useAuthStore = create((set, get) => ({
       const res = await axiosInstance.post("/auth/login", data);
       set({ authUser: res.data });
       toast.success("Logged in successfully");
-
-      // FIX: Langsung connect socket setelah login
       get().connectSocket();
     } catch (error) {
       toast.error(error.response.data.message);
@@ -67,8 +60,6 @@ export const useAuthStore = create((set, get) => ({
       await axiosInstance.post("/auth/logout");
       set({ authUser: null });
       toast.success("Logged out successfully");
-      
-      // FIX: Putus koneksi socket pas logout
       get().disconnectSocket();
     } catch (error) {
       toast.error(error.response.data.message);
@@ -89,22 +80,17 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // --- LOGIC SOCKET UTAMA ---
   connectSocket: () => {
     const { authUser } = get();
-    // Kalau gak ada user atau socket udah nyala, stop (biar gak double)
     if (!authUser || get().socket?.connected) return;
 
     const socket = io(BASE_URL, {
-      query: {
-        userId: authUser._id,
-      },
+      query: { userId: authUser._id },
     });
     socket.connect();
 
     set({ socket: socket });
 
-    // Dengerin update user online dari backend
     socket.on("getOnlineUsers", (userIds) => {
       set({ onlineUsers: userIds });
     });
@@ -113,4 +99,31 @@ export const useAuthStore = create((set, get) => ({
   disconnectSocket: () => {
     if (get().socket?.connected) get().socket.disconnect();
   },
+
+  // --- FUNGSI BARU BUAT UPDATE INSTANT (OPTIMISTIC UI) ---
+  
+  // 1. Langsung jadiin temen di layar (Hapus dari request, masukin ke contacts)
+  addContactLocal: (newContactId) => {
+      set((state) => ({
+          authUser: {
+              ...state.authUser,
+              contacts: [...(state.authUser.contacts || []), newContactId],
+              friendRequests: state.authUser.friendRequests.filter(id => id !== newContactId)
+          }
+      }));
+  },
+
+  // 2. Langsung hapus temen di layar
+  removeContactLocal: (contactId) => {
+      set((state) => ({
+          authUser: {
+              ...state.authUser,
+              contacts: state.authUser.contacts.filter(id => id !== contactId),
+              friendRequests: state.authUser.friendRequests.filter(id => id !== contactId)
+          }
+      }));
+  },
+
+  // 3. (Opsional) Langsung update status request terkirim (biar tombol berubah)
+  // Logic ini agak kompleks kalau di AuthStore, biasanya cukup di ChatStore user list
 }));

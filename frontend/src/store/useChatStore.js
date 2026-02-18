@@ -12,14 +12,12 @@ export const useChatStore = create((set, get) => ({
   unreadMessages: {},
 
   getUsers: async () => {
-    set({ isUsersLoading: true });
+    // Loading state dimatiin biar gak blinking pas auto-refresh
     try {
       const res = await axiosInstance.get("/messages/users");
       set({ users: res.data });
     } catch (error) {
-      toast.error(error.response.data.message);
-    } finally {
-      set({ isUsersLoading: false });
+      console.error(error);
     }
   },
 
@@ -28,11 +26,9 @@ export const useChatStore = create((set, get) => ({
     try {
       const res = await axiosInstance.get(`/messages/${userId}`);
       set({ messages: res.data });
-      set((state) => ({
-        unreadMessages: { ...state.unreadMessages, [userId]: 0 }
-      }));
+      set((state) => ({ unreadMessages: { ...state.unreadMessages, [userId]: 0 } }));
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error("Gagal load chat");
     } finally {
       set({ isMessagesLoading: false });
     }
@@ -44,78 +40,75 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
       set({ messages: [...messages, res.data] });
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error("Gagal kirim pesan");
     }
   },
 
-  // --- FITUR TEMAN (BARU) ---
-  
-  // 1. Kirim Request / Add Volunteer
+  // --- ACTIONS TEMAN ---
   sendRequest: async (userId) => {
     try {
-        const res = await axiosInstance.post(`/users/request/${userId}`);
-        if(res.data.status === "connected") {
-            toast.success("Berhasil terhubung!");
-        } else {
-            toast.success("Permintaan pertemanan dikirim!");
-        }
-        await useAuthStore.getState().checkAuth(); // Refresh data diri
-        get().getUsers(); // Refresh list user biar status update
+        await axiosInstance.post(`/users/request/${userId}`);
+        toast.success("Request terkirim!");
+        get().getUsers(); // Refresh manual
     } catch (error) {
         toast.error(error.response?.data?.message || "Gagal");
     }
   },
 
-  // 2. Terima Request
   acceptRequest: async (userId) => {
       try {
           await axiosInstance.post(`/users/accept/${userId}`);
           toast.success("Pertemanan diterima!");
-          await useAuthStore.getState().checkAuth();
           get().getUsers();
+          useAuthStore.getState().checkAuth(); // Update list kontak sendiri
       } catch (error) {
-          toast.error("Gagal menerima");
+          toast.error("Gagal accept");
       }
   },
 
-  // 3. Unfriend
   removeContact: async (userId) => {
-      if(!window.confirm("Yakin mau hapus teman ini?")) return;
-      
+      if(!window.confirm("Yakin mau hapus/batalin?")) return;
       try {
           await axiosInstance.post(`/users/remove/${userId}`);
-          toast.success("Kontak dihapus.");
-          set({ selectedUser: null }); // Tutup chat kalo lagi dibuka
-          await useAuthStore.getState().checkAuth();
+          toast.success("Dihapus.");
+          set({ selectedUser: null });
+          get().getUsers();
+          useAuthStore.getState().checkAuth();
       } catch (error) {
-          toast.error("Gagal menghapus");
+          toast.error("Gagal hapus");
       }
   },
 
-  // ... (Socket logic sama kayak sebelumnya) ...
+  // --- SOCKET ---
   subscribeToMessages: () => {
     const { selectedUser } = get();
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
+
     socket.on("newMessage", (newMessage) => {
       const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser?._id;
       if (isMessageSentFromSelectedUser) {
         set({ messages: [...get().messages, newMessage] });
       } else {
-        set((state) => ({
-            unreadMessages: {
-                ...state.unreadMessages,
-                [newMessage.senderId]: (state.unreadMessages[newMessage.senderId] || 0) + 1
-            }
-        }));
+        set((state) => ({ unreadMessages: { ...state.unreadMessages, [newMessage.senderId]: (state.unreadMessages[newMessage.senderId] || 0) + 1 } }));
       }
     });
+
+    // AUTO REFRESH LIST TEMAN
+    socket.on("friendUpdate", () => {
+        console.log("Friend update detected!");
+        get().getUsers();
+        useAuthStore.getState().checkAuth();
+    });
   },
+
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
     socket.off("newMessage");
+    socket.off("friendUpdate");
   },
+
   setSelectedUser: (selectedUser) => {
       set((state) => ({ selectedUser, unreadMessages: { ...state.unreadMessages, [selectedUser?._id]: 0 } }));
   },
