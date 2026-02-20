@@ -31,7 +31,8 @@ const ChatContainer = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-auto relative">
+    // FIX PENTING: pb-[70px] lg:pb-0 bikin area chat tidak tertutup bottom nav di Mobile
+    <div className="flex-1 flex flex-col overflow-auto relative pb-[70px] lg:pb-0">
       <div className="flex items-center justify-between border-b border-base-300 w-full pr-4 bg-base-100">
          <div className="flex-1"><ChatHeader /></div>
          <button onClick={openGameMenu} className="btn btn-sm btn-circle btn-ghost text-primary tooltip tooltip-left" data-tip="Main Game"><Gamepad2 className="size-6" /></button>
@@ -47,7 +48,7 @@ const ChatContainer = () => {
                     <iframe 
                         key={musicTimestamp} 
                         style={{borderRadius: "12px"}} 
-                        src={`https://open.spotify.com/embed/${musicType}/${musicId}?utm_source=generator&theme=0`} 
+                        src={`https://open.spotify.com/embed/$${musicType}/${musicId}?utm_source=generator&theme=0`} 
                         width="100%" 
                         height="80" 
                         frameBorder="0" 
@@ -77,21 +78,8 @@ const ChatContainer = () => {
             </div>
 
             <div className="flex flex-col gap-1 ml-2">
-                {/* FIX: MENGIRIM selectedUser._id KE FUNGSI STOP & RESYNC */}
-                <button 
-                    onClick={() => stopMusic(selectedUser._id)} 
-                    className="btn btn-ghost btn-xs text-error" 
-                    data-tip="Stop"
-                >
-                    <XCircle className="size-5"/>
-                </button>
-                <button 
-                    onClick={() => resyncMusic(selectedUser._id)} 
-                    className="btn btn-ghost btn-xs text-primary animate-pulse hover:animate-spin" 
-                    data-tip="Sync"
-                >
-                    <RefreshCw className="size-5"/>
-                </button>
+                <button onClick={() => stopMusic(selectedUser._id)} className="btn btn-ghost btn-xs text-error" data-tip="Stop"><XCircle className="size-5"/></button>
+                <button onClick={() => resyncMusic(selectedUser._id)} className="btn btn-ghost btn-xs text-primary animate-pulse hover:animate-spin" data-tip="Sync"><RefreshCw className="size-5"/></button>
             </div>
         </div>
       )}

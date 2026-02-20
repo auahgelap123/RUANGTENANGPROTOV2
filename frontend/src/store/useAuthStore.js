@@ -48,6 +48,12 @@ export const useAuthStore = create((set, get) => ({
       set({ authUser: res.data });
       toast.success("Logged in successfully");
       get().connectSocket();
+      
+      // Jeda bentar biar toast suksesnya kebaca sebelum hard refresh
+      setTimeout(() => {
+          window.location.reload();
+      }, 500);
+
     } catch (error) {
       toast.error(error.response.data.message);
     } finally {
@@ -57,10 +63,13 @@ export const useAuthStore = create((set, get) => ({
 
   logout: async () => {
     try {
-      await axiosInstance.post("/auth/logout");
+      await axiosInstance.post("/auth/logout"); 
       set({ authUser: null });
-      toast.success("Logged out successfully");
       get().disconnectSocket();
+      
+      // Hard refresh biar cache bener-bener bersih
+      window.location.reload(); 
+      
     } catch (error) {
       toast.error(error.response.data.message);
     }
@@ -100,30 +109,47 @@ export const useAuthStore = create((set, get) => ({
     if (get().socket?.connected) get().socket.disconnect();
   },
 
-  // --- FUNGSI BARU BUAT UPDATE INSTANT (OPTIMISTIC UI) ---
-  
-  // 1. Langsung jadiin temen di layar (Hapus dari request, masukin ke contacts)
+  // --- FUNGSI OPTIMISTIC UI UNTUK CONTACT ---
   addContactLocal: (newContactId) => {
       set((state) => ({
           authUser: {
               ...state.authUser,
               contacts: [...(state.authUser.contacts || []), newContactId],
-              friendRequests: state.authUser.friendRequests.filter(id => id !== newContactId)
+              friendRequests: state.authUser.friendRequests?.filter(id => id !== newContactId) || []
           }
       }));
   },
 
-  // 2. Langsung hapus temen di layar
   removeContactLocal: (contactId) => {
       set((state) => ({
           authUser: {
               ...state.authUser,
-              contacts: state.authUser.contacts.filter(id => id !== contactId),
-              friendRequests: state.authUser.friendRequests.filter(id => id !== contactId)
+              contacts: state.authUser.contacts?.filter(id => id !== contactId) || [],
+              friendRequests: state.authUser.friendRequests?.filter(id => id !== contactId) || []
           }
       }));
   },
 
-  // 3. (Opsional) Langsung update status request terkirim (biar tombol berubah)
-  // Logic ini agak kompleks kalau di AuthStore, biasanya cukup di ChatStore user list
+  // --- FUNGSI TUKAR POIN / ENERGI DENGAN WAKTU CHAT ---
+  buyTime: async (packageKey) => {
+    try {
+      // Pastikan '/users/buy-time' sesuai dengan penamaan route user lo di app.js/server.js
+      // Kalau error 404, coba ganti jadi '/auth/buy-time' (tergantung lo naruh router-nya di mana)
+      const res = await axiosInstance.post("/users/buy-time", { packageKey }); 
+      
+      // Update UI seketika tanpa perlu refresh
+      set((state) => ({
+        authUser: {
+          ...state.authUser,
+          points: res.data.points,
+          chatAccessUntil: res.data.chatAccessUntil
+        }
+      }));
+      
+      toast.success(res.data.message);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Gagal menukar energi");
+    }
+  },
+
 }));
