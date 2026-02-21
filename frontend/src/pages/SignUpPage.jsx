@@ -17,11 +17,11 @@ const SignUpPage = () => {
   const { signup, isSigningUp } = useAuthStore();
 
   const validateForm = () => {
-    if (!formData.fullName.trim()) return toast.error("Full name is required");
-    if (!formData.email.trim()) return toast.error("Email is required");
-    if (!/\S+@\S+\.\S+/.test(formData.email)) return toast.error("Invalid email format");
-    if (!formData.password) return toast.error("Password is required");
-    if (formData.password.length < 6) return toast.error("Password must be at least 6 characters");
+    if (!formData.fullName.trim()) return toast.error("Mohon isi namamu agar kami bisa menyapa");
+    if (!formData.email.trim()) return toast.error("Alamat email tidak boleh kosong ya");
+    if (!/\S+@\S+\.\S+/.test(formData.email)) return toast.error("Format email sepertinya kurang tepat");
+    if (!formData.password) return toast.error("Kata sandi belum diisi");
+    if (formData.password.length < 6) return toast.error("Kata sandi minimal 6 karakter biar lebih aman");
 
     return true;
   };
@@ -48,15 +48,15 @@ const SignUpPage = () => {
               >
                 <MessageSquare className="size-6 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold mt-2">Create Account</h1>
-              <p className="text-base-content/60">Get started with your free account</p>
+              <h1 className="text-2xl font-bold mt-2">Mulai Langkahmu</h1>
+              <p className="text-base-content/60">Mari buat ruang aman untukmu bercerita</p>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="form-control">
               <label className="label">
-                <span className="label-text font-medium">Full Name</span>
+                <span className="label-text font-medium">Nama Lengkap</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -65,7 +65,7 @@ const SignUpPage = () => {
                 <input
                   type="text"
                   className={`input input-bordered w-full pl-10`}
-                  placeholder="John Doe"
+                  placeholder="Nama panggilanmu"
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                 />
@@ -74,7 +74,7 @@ const SignUpPage = () => {
 
             <div className="form-control">
               <label className="label">
-                <span className="label-text font-medium">Email</span>
+                <span className="label-text font-medium">Alamat Email</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -83,7 +83,7 @@ const SignUpPage = () => {
                 <input
                   type="email"
                   className={`input input-bordered w-full pl-10`}
-                  placeholder="you@example.com"
+                  placeholder="kamu@email.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
@@ -92,7 +92,7 @@ const SignUpPage = () => {
 
             <div className="form-control">
               <label className="label">
-                <span className="label-text font-medium">Password</span>
+                <span className="label-text font-medium">Kata Sandi</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -123,19 +123,19 @@ const SignUpPage = () => {
               {isSigningUp ? (
                 <>
                   <Loader2 className="size-5 animate-spin" />
-                  Loading...
+                  Menyiapkan ruangmu...
                 </>
               ) : (
-                "Create Account"
+                "Buat Akun Sekarang"
               )}
             </button>
           </form>
 
           <div className="text-center">
             <p className="text-base-content/60">
-              Already have an account?{" "}
+              Sudah punya tempat berbagi?{" "}
               <Link to="/login" className="link link-primary">
-                Sign in
+                Masuk di sini
               </Link>
             </p>
           </div>
@@ -145,8 +145,8 @@ const SignUpPage = () => {
       {/* right side */}
 
       <AuthImagePattern
-        title="Join our community"
-        subtitle="Connect with friends, share moments, and stay in touch with your loved ones."
+        title="Temukan Ketenanganmu."
+        subtitle="Bergabunglah dengan Ruang Tenang. Sebuah tempat aman untuk bercerita, didengar, dan saling menguatkan."
       />
     </div>
   );

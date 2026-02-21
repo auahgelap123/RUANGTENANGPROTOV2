@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { useGameStore } from "../store/useGameStore.jsx"; 
-import { Image, Send, X, Music, Link as LinkIcon, Lock, Zap } from "lucide-react";
+import { Image, Send, X, Music, Link as LinkIcon, Lock, Zap, ShieldAlert } from "lucide-react";
 import toast from "react-hot-toast";
 
 const TIME_PACKAGES = [
@@ -17,6 +17,8 @@ const TIME_PACKAGES = [
 const MessageInput = () => {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
+  
+  // State Music
   const [showMusicInput, setShowMusicInput] = useState(false);
   const [musicLink, setMusicLink] = useState("");
 
@@ -29,22 +31,29 @@ const MessageInput = () => {
   const [isBuying, setIsBuying] = useState(false);
   const [selectedPkg, setSelectedPkg] = useState('1h');
 
-  // --- LOGIC PENGECEKAN WAKTU ---
+  // --- STATE KHUSUS ADMIN BUAT NGETEST GEMBOK ---
+  const [adminBypass, setAdminBypass] = useState(true); // Default: Admin kebal
+
+  // --- LOGIC PENGECEKAN WAKTU & ROLE ---
   useEffect(() => {
     const checkTime = () => {
-      // 1. Relawan & Psikolog BEBAS, KECUALI mereka ngechat ke Psikolog lain
+      // 1. KHUSUS ADMIN: Kalau Bypass aktif = Bebas. Kalau Bypass mati = LANGSUNG KEKUNCI (Paksa Kunci)
+      if (authUser?.role === "admin") {
+        setIsTimeUp(!adminBypass); 
+        return;
+      }
+      
+      // 2. Relawan & Psikolog BEBAS, KECUALI mereka ngechat ke Psikolog lain
       if ((authUser?.role === "volunteer" || authUser?.role === "psychologist") && selectedUser?.role !== "psychologist") {
         setIsTimeUp(false);
         return;
       }
 
-      // 2. User biasa & Admin akan kena gembok kalau waktunya habis
-      // (Ini biar lo sbg Admin bisa ngetest bayar poin beneran)
+      // 3. User biasa cek waktu
       if (!authUser?.chatAccessUntil) {
           setIsTimeUp(true);
           return;
       }
-      
       const now = new Date();
       const accessTime = new Date(authUser.chatAccessUntil);
       setIsTimeUp(now > accessTime);
@@ -53,7 +62,7 @@ const MessageInput = () => {
     checkTime();
     const interval = setInterval(checkTime, 60000); 
     return () => clearInterval(interval);
-  }, [authUser?.chatAccessUntil, authUser?.role, selectedUser?.role]);
+  }, [authUser?.chatAccessUntil, authUser?.role, selectedUser?.role, adminBypass]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -102,11 +111,11 @@ const MessageInput = () => {
 
   const currentPkgDetails = TIME_PACKAGES.find(p => p.id === selectedPkg);
 
-  // --- JIKA WAKTU HABIS, TAMPILKAN LAYAR GEMBOK (REAL FLOW) ---
+  // --- JIKA WAKTU HABIS, TAMPILKAN LAYAR GEMBOK ---
   if (isTimeUp) {
       return (
           <div className="p-4 w-full relative bg-base-200/50 border-t border-base-300">
-              <div className="flex flex-col items-center justify-center p-3 gap-2 bg-base-100 rounded-xl border border-error/20 shadow-sm relative overflow-hidden">
+              <div className="flex flex-col items-center justify-center p-4 gap-3 bg-base-100 rounded-xl border border-error/20 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-error/50"></div>
                   
                   <div className="flex items-center gap-2 text-error font-bold">
@@ -114,14 +123,14 @@ const MessageInput = () => {
                       <span>Akses Chat Terkunci</span>
                   </div>
                   
-                  <p className="text-xs text-zinc-500 text-center max-w-sm mb-1">
+                  <p className="text-xs text-zinc-500 text-center max-w-sm">
                       {selectedUser?.role === "psychologist" 
                         ? "Sesi dengan Psikolog membutuhkan tiket akses." 
                         : "Waktu chat habis. Kerjakan quest untuk mengumpulkan Energi Sosial."}
                   </p>
                   
                   <select 
-                      className="select select-bordered select-sm w-full max-w-xs mb-1"
+                      className="select select-bordered select-sm w-full max-w-xs"
                       value={selectedPkg}
                       onChange={(e) => setSelectedPkg(e.target.value)}
                   >
@@ -135,7 +144,7 @@ const MessageInput = () => {
                   <button 
                       onClick={handleBuyTime} 
                       disabled={isBuying || authUser?.points < currentPkgDetails.cost}
-                      className="btn btn-sm btn-primary mt-1 w-full max-w-xs gap-2"
+                      className="btn btn-sm btn-primary w-full max-w-xs gap-2"
                   >
                       {isBuying ? <span className="loading loading-spinner size-4"></span> : <Zap className="size-4" />}
                       Tukar {currentPkgDetails.cost} ⚡
@@ -146,14 +155,37 @@ const MessageInput = () => {
                           Energi kamu tidak cukup. ({authUser?.points || 0} / {currentPkgDetails.cost} ⚡)
                       </span>
                   )}
+
+                  {/* TOMBOL BYPASS KHUSUS ADMIN SAAT TERKUNCI */}
+                  {authUser?.role === "admin" && (
+                      <button 
+                          onClick={() => setAdminBypass(true)} 
+                          className="btn btn-xs btn-ghost text-zinc-400 mt-2 hover:text-error"
+                      >
+                          <ShieldAlert className="size-3 mr-1" /> Matikan Simulasi Gembok (Admin)
+                      </button>
+                  )}
               </div>
           </div>
       );
   }
 
-  // --- JIKA WAKTU MASIH ADA, TAMPILKAN INPUT NORMAL ---
+  // --- JIKA WAKTU MASIH ADA / ROLE GRATIS, TAMPILKAN INPUT NORMAL ---
   return (
     <div className="p-4 w-full relative">
+      
+      {/* TOMBOL SIMULASI GEMBOK KHUSUS ADMIN SAAT BEBAS */}
+      {authUser?.role === "admin" && (
+          <div className="absolute -top-10 right-4 z-10">
+              <button 
+                  onClick={() => setAdminBypass(false)} 
+                  className="btn btn-xs btn-warning btn-outline bg-base-100 shadow-sm"
+              >
+                  <ShieldAlert className="size-3" /> Test Gembok (Admin)
+              </button>
+          </div>
+      )}
+
       {showMusicInput && (
           <div className="absolute bottom-20 left-4 right-4 bg-base-200 p-3 rounded-xl border border-base-300 shadow-xl z-20 animate-in slide-in-from-bottom-2">
               <div className="flex justify-between items-center mb-2">
@@ -185,15 +217,24 @@ const MessageInput = () => {
         </div>
       )}
 
-      <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-        <div className="flex-1 flex gap-2">
+      <form onSubmit={handleSendMessage} className="flex items-center gap-1 sm:gap-2">
+        <div className="flex-1 flex gap-1 sm:gap-2 items-center">
           <input type="text" className="w-full input input-bordered rounded-lg input-sm sm:input-md" placeholder="Ketik pesan..." value={text} onChange={(e) => setText(e.target.value)}/>
           <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageChange}/>
 
-          <button type="button" className={`hidden sm:flex btn btn-circle ${imagePreview ? "text-emerald-500" : "text-zinc-400"}`} onClick={() => fileInputRef.current?.click()}><Image size={20} /></button>
-          <button type="button" className={`hidden sm:flex btn btn-circle ${showMusicInput ? "text-primary bg-primary/10" : "text-zinc-400"}`} onClick={() => setShowMusicInput(!showMusicInput)}><Music size={20} /></button>
+          {/* FIX: 'hidden sm:flex' dihapus, diganti jadi 'flex' biar nongol di Mobile */}
+          <button type="button" className={`flex btn btn-sm sm:btn-md btn-circle ${imagePreview ? "text-emerald-500" : "text-zinc-400"}`} onClick={() => fileInputRef.current?.click()}>
+              <Image size={18} className="sm:w-5 sm:h-5" />
+          </button>
+          
+          <button type="button" className={`flex btn btn-sm sm:btn-md btn-circle ${showMusicInput ? "text-primary bg-primary/10" : "text-zinc-400"}`} onClick={() => setShowMusicInput(!showMusicInput)}>
+              <Music size={18} className="sm:w-5 sm:h-5" />
+          </button>
         </div>
-        <button type="submit" className="btn btn-sm btn-circle" disabled={!text.trim() && !imagePreview}><Send size={22} /></button>
+
+        <button type="submit" className="btn btn-sm sm:btn-md btn-circle" disabled={!text.trim() && !imagePreview}>
+            <Send size={18} className="sm:w-5 sm:h-5" />
+        </button>
       </form>
     </div>
   );

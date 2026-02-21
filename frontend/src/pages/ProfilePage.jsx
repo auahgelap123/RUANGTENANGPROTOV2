@@ -3,7 +3,6 @@ import { useAuthStore } from "../store/useAuthStore";
 import { Camera, Mail, User, Zap, Clock, Trophy, Star } from "lucide-react";
 
 const ProfilePage = () => {
-  // Pastikan buyTime udah ada di useAuthStore lo ya bro!
   const { authUser, isUpdatingProfile, updateProfile, buyTime } = useAuthStore();
   const [selectedImg, setSelectedImg] = useState(null);
   const [timeLeft, setTimeLeft] = useState("");
@@ -45,17 +44,23 @@ const ProfilePage = () => {
 
   const handleBuyTime = async () => {
     setIsBuying(true);
-    await buyTime();
+    // FIX: Lempar ID paket '4h' (4 jam yang harganya 60 poin) atau sesuaikan sama harga di MessageInput.
+    // Di sini gue pake '4h' biar lumayan lama nambahnya.
+    await buyTime('4h'); 
     setIsBuying(false);
   };
+
+  // Cek apakah poin cukup untuk paket '4h' (harganya 60)
+  // Ubah angka ini kalau lo mau ganti paket default di profile
+  const cost = 60; 
 
   return (
     <div className="h-screen pt-20 overflow-y-auto">
       <div className="max-w-2xl mx-auto p-4 py-8">
         <div className="bg-base-300 rounded-xl p-6 space-y-8">
           <div className="text-center">
-            <h1 className="text-2xl font-semibold ">Profile</h1>
-            <p className="mt-2 text-zinc-400">Your profile information</p>
+            <h1 className="text-2xl font-semibold ">Profil Saya</h1>
+            <p className="mt-2 text-zinc-400">Kelola informasi dan statistikmu</p>
           </div>
 
           {/* --- AVATAR UPLOAD SECTION --- */}
@@ -88,7 +93,7 @@ const ProfilePage = () => {
               </label>
             </div>
             <p className="text-sm text-zinc-400">
-              {isUpdatingProfile ? "Uploading..." : "Click the camera icon to update your photo"}
+              {isUpdatingProfile ? "Mengunggah..." : "Klik ikon kamera untuk mengubah foto"}
             </p>
           </div>
 
@@ -97,7 +102,7 @@ const ProfilePage = () => {
             <div className="space-y-1.5">
               <div className="text-sm text-zinc-400 flex items-center gap-2">
                 <User className="w-4 h-4" />
-                Full Name
+                Nama Lengkap
               </div>
               <p className="px-4 py-2.5 bg-base-200 rounded-lg border border-base-300 font-medium">
                 {authUser?.fullName} 
@@ -110,16 +115,16 @@ const ProfilePage = () => {
             <div className="space-y-1.5">
               <div className="text-sm text-zinc-400 flex items-center gap-2">
                 <Mail className="w-4 h-4" />
-                Email Address
+                Alamat Email
               </div>
               <p className="px-4 py-2.5 bg-base-200 rounded-lg border border-base-300">{authUser?.email}</p>
             </div>
           </div>
 
-          {/* --- STATS & DIGITAL WELLBEING SECTION (NEW) --- */}
+          {/* --- STATS & DIGITAL WELLBEING SECTION --- */}
           <div className="mt-6 bg-base-200 rounded-xl p-6 border border-base-300 shadow-sm">
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <Star className="w-5 h-5 text-yellow-500" /> Stats & Wellbeing
+              <Star className="w-5 h-5 text-yellow-500" /> Stats & Kesejahteraan
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -156,14 +161,14 @@ const ProfilePage = () => {
                     
                     <button 
                         onClick={handleBuyTime} 
-                        disabled={isBuying || authUser?.points < 50}
+                        disabled={isBuying || authUser?.points < cost}
                         className="btn btn-primary btn-sm gap-2"
                     >
                         {isBuying ? <span className="loading loading-spinner size-4"></span> : <Zap className="w-4 h-4" />}
-                        Tukar 50 Poin
+                        Tukar {cost} Poin (+4 Jam)
                     </button>
                 </div>
-                {authUser?.points < 50 && timeLeft.includes("Habis") && (
+                {authUser?.points < cost && timeLeft.includes("Habis") && (
                     <div className="mt-3 text-xs text-error text-center bg-error/10 p-2 rounded-lg">
                         Energi kamu tidak cukup. Kerjakan Quest hari ini untuk mendapatkan energi tambahan!
                     </div>
@@ -173,10 +178,10 @@ const ProfilePage = () => {
 
           {/* --- ACCOUNT INFO SECTION --- */}
           <div className="mt-6 bg-base-200 rounded-xl p-6 border border-base-300 shadow-sm">
-            <h2 className="text-lg font-medium mb-4">Account Information</h2>
+            <h2 className="text-lg font-medium mb-4">Informasi Akun</h2>
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between py-2 border-b border-base-300">
-                <span className="text-zinc-400">Member Since</span>
+                <span className="text-zinc-400">Bergabung Sejak</span>
                 <span className="font-medium">{authUser.createdAt?.split("T")[0]}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-base-300">
@@ -184,8 +189,8 @@ const ProfilePage = () => {
                 <span className="font-medium">{authUser?.exp || 0} XP</span>
               </div>
               <div className="flex items-center justify-between py-2">
-                <span className="text-zinc-400">Account Status</span>
-                <span className="text-success font-bold">Active</span>
+                <span className="text-zinc-400">Status Akun</span>
+                <span className="text-success font-bold">Aktif</span>
               </div>
             </div>
           </div>

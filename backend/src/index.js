@@ -26,7 +26,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",       // Izin buat buka di PC
+      "http://192.168.1.2:5173"      // Izin buat buka di HP
+    ],
     credentials: true,
   })
 );

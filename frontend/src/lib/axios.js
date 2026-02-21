@@ -1,6 +1,8 @@
 import axios from "axios";
 
+const serverIP = window.location.hostname;
+
 export const axiosInstance = axios.create({
-  baseURL: import.meta.env.MODE === "development" ? "http://localhost:5001/api" : "/api",
+  baseURL: `http://${serverIP}:5001/api`, 
   withCredentials: true,
 });
